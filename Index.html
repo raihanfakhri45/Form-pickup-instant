@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<!--
+=====================================================================
+ PANDUAN PENYESUAIAN (index.html)
+=====================================================================
+ Hampir semua pengaturan ada di 2 tempat:
+   1) CSS bagian ":root"        -> warna, jarak, sudut membulat
+   2) JavaScript bagian "CONFIG" -> URL, kolom, batas karakter, pesan
+
+ YANG BISA DIUBAH
+   - Warna / jarak ........ blok :root di CSS (--warna-utama, --jarak-antar-field, dll.)
+   - Judul & deskripsi .... tag <title>, <h1>, dan <p class="deskripsi">
+   - Teks tombol .......... <button ...>Kirim data</button>
+   - URL Apps Script ...... CONFIG.scriptUrl (berakhiran /exec)
+   - Kolom isian .......... CONFIG.field (nama, label, placeholder, max, wajib)
+   - Karakter diizinkan ... CONFIG.polaTerlarang dan CONFIG.pesanKarakter
+   - Pesan sukses/gagal ... CONFIG.pesanSukses dan CONFIG.pesanGagal
+   - Kecepatan kirim ..... CONFIG.kirimCepat (false = aman, true = sukses tampil seketika)
+   - Refresh otomatis .... CONFIG.refreshOtomatis dan CONFIG.jedaRefresh
+   - Getar saat gagal .... CONFIG.getarSaatGagal dan CONFIG.polaGetar
+
+ MENAMBAH KOLOM BARU
+   1. Tambahkan satu baris di CONFIG.field, contoh:
+        { nama: "catatan", label: "Catatan", placeholder: "Maks. 10 karakter", max: 10, wajib: false },
+   2. Tambahkan baris yang SAMA (nama, max, wajib) di array FIELD pada Code.gs.
+   3. Hapus tab "Respon" di Google Sheets agar header dibuat ulang.
+   4. Deploy ulang Code.gs (versi baru).
+   Untuk menghapus kolom, lakukan langkah yang sama dengan arah sebaliknya.
+
+ HARUS SAMA DENGAN Code.gs
+   - "nama" setiap field (huruf besar-kecil juga, tanpa spasi)
+   - "max" dan "wajib"
+   - Pola karakter (polaTerlarang di sini = POLA_DIIZINKAN di Code.gs)
+   - Urutan baris menentukan urutan kolom di Google Sheets
+   - Placeholder (mis. "Maks. 6 karakter") TIDAK otomatis; ubah manual jika max diubah
+
+ JANGAN DIUBAH
+   - Bagian di bawah tulisan "KODE FORMULIR - umumnya tidak perlu diubah"
+   - Blok <div class="jebakan"> (honeypot anti-bot)
+
+ TIPS
+   - Mengubah file ini tidak perlu deploy ulang; cukup simpan/unggah ulang.
+   - Jika kirim data gagal, tekan F12 dan lihat tab Console untuk pesan error.
+   - Simpan cadangan file sebelum mengedit.
+=====================================================================
+-->
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formulir Pickup</title>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ==========================================================
+   1. WARNA & UKURAN — ubah di sini untuk mengganti tema
+   ========================================================== */
+:root {
+  --warna-utama:       #0f766e;   /* tombol, fokus, aksen   */
+  --warna-utama-gelap: #115e59;   /* tombol saat di-hover   */
+  --warna-latar:       #f1f5f4;   /* latar halaman          */
+  --warna-kartu:       #ffffff;   /* latar kartu formulir   */
+  --warna-teks:        #14211f;   /* teks utama             */
+  --warna-teks-redup:  #5b6b68;   /* label bantu, counter   */
+  --warna-garis:       #cfdad7;   /* border input           */
+  --warna-error:       #c0262d;
+  --warna-sukses:      #17653a;
+  --warna-sukses-latar:#e4f4ea;
+  --radius:            10px;
+  --jarak-antar-field: 6px;    /* jarak antar baris: kecilkan untuk lebih rapat */
+}
+
+/* ==========================================================
+   2. STYLE DASAR
+   ========================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 32px 16px;
+  background: var(--warna-latar);
+  color: var(--warna-teks);
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.kartu {
+  width: 100%;
+  max-width: 480px;
+  background: var(--warna-kartu);
+  border: 1px solid var(--warna-garis);
+  border-radius: 16px;
+  padding: 32px 28px;
+}
+
+h1 { margin: 0 0 4px; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
+.deskripsi { margin: 0 0 20px; color: var(--warna-teks-redup); font-size: .95rem; }
+
+/* ==========================================================
+   3. FIELD
+   ========================================================== */
+.field { margin-bottom: var(--jarak-antar-field); }
+
+label, .label-grup {
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 600;
+  font-size: .9rem;
+}
+
+input[type="text"],
+select {
+  width: 100%;
+  padding: 9px 12px;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1.5px solid var(--warna-garis);
+  border-radius: var(--radius);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+input:focus-visible, select:focus-visible {
+  outline: none;
+  border-color: var(--warna-utama);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warna-utama) 22%, transparent);
+}
+
+.field.invalid input,
+.field.invalid select { border-color: var(--warna-error); }
+
+.baris-bawah {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  min-height: 1.1rem;
+  line-height: 1.1rem;
+  font-size: .78rem;
+}
+
+.pesan-error { color: var(--warna-error); }
+.counter     { margin-left: auto; color: var(--warna-teks-redup); font-variant-numeric: tabular-nums; }
+.counter.habis { color: var(--warna-error); font-weight: 600; }
+
+.opsional { margin-left: 6px; font-weight: 400; font-size: .82rem; color: var(--warna-teks-redup); }
+
+/* Honeypot anti-bot: jangan dihapus */
+.jebakan { position: absolute; left: -9999px; height: 0; overflow: hidden; }
+
+/* ==========================================================
+   4. TOMBOL & PESAN STATUS
+   ========================================================== */
+button[type="submit"] {
+  width: 100%;
+  padding: 14px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--warna-utama);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .15s;
+}
+button[type="submit"]:hover:not(:disabled) { background: var(--warna-utama-gelap); }
+button[type="submit"]:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--warna-utama) 40%, transparent);
+  outline-offset: 2px;
+}
+button[type="submit"]:disabled { opacity: .6; cursor: not-allowed; }
+
+.status {
+  display: none;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  font-size: .92rem;
+}
+.status.tampil  { display: block; }
+.status.sukses  { background: var(--warna-sukses-latar); color: var(--warna-sukses); }
+.status.gagal   { background: #fbe9ea; color: var(--warna-error); }
+
+@media (max-width: 480px) {
+  body  { padding: 16px 12px; }
+  .kartu { padding: 24px 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+
+<body>
+<main class="kartu">
+  <h1>Formulir Pickup</h1>
+  <p class="deskripsi">Isi nomor antrian dan kode pickup, lalu tekan Kirim data.</p>
+
+  <form id="formulir" novalidate>
+    <!-- Field dibuat otomatis dari CONFIG di bawah -->
+    <div id="area-field"></div>
+
+    <!-- Honeypot: bot biasanya mengisi kolom ini, manusia tidak melihatnya -->
+    <div class="jebakan" aria-hidden="true">
+      <label>Jangan diisi <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+    </div>
+
+    <button type="submit" id="tombol-kirim">Kirim data</button>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </form>
+</main>
+
+<script>
+/* ==========================================================
+   KONFIGURASI — bagian yang biasa Anda ubah
+   ========================================================== */
+const CONFIG = {
+
+  // Tempel URL Web App dari Google Apps Script (berakhiran /exec)
+  scriptUrl: "https://script.google.com/macros/s/AKfycbyZ07UbNEE34ZXc06BOJdB7gDHvagL_nVY9Ot_N-YaiR_wmjUCeAYTkApLL0-oewTIl_Q/exec",
+
+  // Daftar field. Urutan di sini = urutan tampil di formulir.
+  //   nama  : kunci data (jangan pakai spasi; harus sama dengan KOLOM di Code.gs)
+  //   max   : batas karakter
+  //   wajib : true = harus diisi, false = boleh dikosongkan
+  field: [
+    { nama: "antrian", label: "Nomor Antrian",  placeholder: "Maks. 4 karakter", max: 4, wajib: true  },
+    { nama: "pickup1", label: "Kode Pickup 1",  placeholder: "Maks. 6 karakter", max: 6, wajib: true  },
+    { nama: "pickup2", label: "Kode Pickup 2",  placeholder: "Maks. 6 karakter", max: 6, wajib: false },
+    { nama: "pickup3", label: "Kode Pickup 3",  placeholder: "Maks. 6 karakter", max: 6, wajib: false },
+    { nama: "pickup4", label: "Kode Pickup 4",  placeholder: "Maks. 6 karakter", max: 6, wajib: false }
+  ],
+
+  // Karakter yang DIIZINKAN: hanya huruf (A-Z, a-z) dan angka (0-9).
+  // Spasi, #, ; dan karakter khusus lain otomatis ditolak.
+  // Mau mengizinkan tanda tertentu? Tambahkan di dalam [ ], misalnya /[^A-Za-z0-9-]/g untuk mengizinkan tanda hubung.
+  polaTerlarang: /[^A-Za-z0-9]/g,
+  pesanKarakter: "Hanya huruf dan angka yang boleh digunakan (tanpa spasi atau karakter khusus).",
+
+  // Mode kirim cepat:
+  //   false = tombol menunggu sampai data benar-benar tersimpan, baru pesan sukses muncul (paling aman).
+  //   true  = pesan sukses muncul seketika dan formulir langsung kosong, data dikirim di latar belakang.
+  //           Jika ternyata gagal, muncul pesan error dan isian dikembalikan.
+  kirimCepat: false,
+
+  // Refresh halaman otomatis setelah data BERHASIL terkirim (formulir kembali bersih).
+  // jedaRefresh = lama pesan sukses ditampilkan sebelum halaman dimuat ulang (milidetik, 1000 = 1 detik).
+  refreshOtomatis: true,
+  jedaRefresh: 1500,
+
+  // Getar pada HP saat pengiriman GAGAL. Pola: [getar, jeda, getar, ...] dalam milidetik.
+  // Catatan: didukung di Android (Chrome/Firefox). iPhone (Safari) tidak mendukung getar lewat web.
+  getarSaatGagal: true,
+  polaGetar: [250, 120, 250],
+
+  // Teks pesan
+  pesanSukses: "Terima kasih! Data Anda sudah terkirim.",
+  pesanGagal:  "Data belum terkirim. Periksa koneksi internet Anda, lalu coba lagi."
+};
+
+/* ==========================================================
+   KODE FORMULIR — umumnya tidak perlu diubah
+   ========================================================== */
+const form      = document.getElementById("formulir");
+const areaField = document.getElementById("area-field");
+const tombol    = document.getElementById("tombol-kirim");
+const statusEl  = document.getElementById("status");
+
+/* ---------- Membangun field ---------- */
+CONFIG.field.forEach(f => {
+  const wrap = document.createElement("div");
+  wrap.className = "field";
+  wrap.dataset.field = f.nama;
+  wrap.innerHTML = `
+    <label for="${f.nama}">${f.label}${f.wajib ? "" : '<span class="opsional">(opsional)</span>'}</label>
+    <input type="text" id="${f.nama}" name="${f.nama}" placeholder="${f.placeholder || ""}"
+           autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="err-${f.nama}">
+    <div class="baris-bawah">
+      <span class="pesan-error" id="err-${f.nama}"></span>
+      <span class="counter" id="cnt-${f.nama}"></span>
+    </div>`;
+  areaField.appendChild(wrap);
+  updateCounter(f);
+});
+
+/* ---------- Counter karakter ---------- */
+function updateCounter(f) {
+  const input = document.getElementById(f.nama);
+  const cnt   = document.getElementById("cnt-" + f.nama);
+  const sisa  = f.max - input.value.length;
+  cnt.textContent = sisa >= 0 ? `Sisa ${sisa} karakter` : `Lebih ${Math.abs(sisa)} karakter`;
+  cnt.classList.toggle("habis", sisa <= 0);
+}
+
+/* ---------- Validasi ---------- */
+function bersihkan(teks) { return teks.replace(CONFIG.polaTerlarang, ""); }
+
+function setError(id, pesan) {
+  document.getElementById("err-" + id).textContent = pesan;
+  document.querySelector(`[data-field="${id}"]`).classList.toggle("invalid", Boolean(pesan));
+  document.getElementById(id).setAttribute("aria-invalid", pesan ? "true" : "false");
+}
+
+function validasiField(f) {
+  const v = document.getElementById(f.nama).value.trim();
+  let pesan = "";
+  if (!v) {
+    if (f.wajib) pesan = "Kolom ini wajib diisi.";
+  } else if (v.length > f.max) {
+    pesan = `Maksimal ${f.max} karakter. Kurangi ${v.length - f.max} karakter.`;
+  } else if (bersihkan(v) !== v) {
+    pesan = CONFIG.pesanKarakter;
+  }
+  setError(f.nama, pesan);
+  return !pesan;
+}
+
+const cariField = nama => CONFIG.field.find(f => f.nama === nama);
+
+/* Counter & validasi langsung saat mengetik */
+form.addEventListener("input", e => {
+  const f = cariField(e.target.name);
+  if (!f) return;
+  const el  = e.target;
+  const raw = el.value;
+
+  // Buang karakter terlarang, lalu potong sesuai batas
+  const posisi  = el.selectionStart ?? raw.length;
+  const bersih  = bersihkan(raw);
+  const hasil   = bersih.slice(0, f.max);
+  const adaTerlarang = bersih.length !== raw.length;
+
+  if (hasil !== raw) {
+    el.value = hasil;
+    const posBaru = Math.min(bersihkan(raw.slice(0, posisi)).length, hasil.length);
+    el.setSelectionRange(posBaru, posBaru);
+  }
+
+  updateCounter(f);
+  validasiField(f);
+
+  // Beri tahu pengguna mengapa karakternya tidak muncul
+  if (adaTerlarang) {
+    setError(f.nama, CONFIG.pesanKarakter);
+    clearTimeout(f._timer);
+    f._timer = setTimeout(() => {
+      if (document.getElementById("err-" + f.nama).textContent === CONFIG.pesanKarakter) validasiField(f);
+    }, 3000);
+  }
+});
+form.addEventListener("focusout", e => {
+  const f = cariField(e.target.name);
+  if (f) validasiField(f);
+});
+
+/* ---------- Status ---------- */
+function tampilStatus(jenis, pesan) {
+  statusEl.className = "status tampil " + jenis;
+  statusEl.textContent = pesan;
+}
+
+/* ---------- Pemanasan server ---------- */
+// Apps Script yang lama tidak dipakai "tertidur" dan lambat saat dipanggil pertama kali.
+// Permintaan ringan saat halaman dibuka membangunkannya, sehingga kiriman pertama lebih cepat.
+if (!CONFIG.scriptUrl.startsWith("PASTE_")) {
+  fetch(CONFIG.scriptUrl, { mode: "no-cors" }).catch(() => {});
+}
+
+/* ---------- Kirim ---------- */
+async function kirimKeServer(data) {
+  // text/plain = "simple request", jadi tidak memicu preflight CORS di Apps Script
+  const res = await fetch(CONFIG.scriptUrl, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(data)
+  });
+  const hasil = await res.json();
+  if (hasil.result !== "success") throw new Error(hasil.message || "Gagal");
+}
+
+function kosongkanFormulir() {
+  form.reset();
+  CONFIG.field.forEach(f => { updateCounter(f); setError(f.nama, ""); });
+}
+
+function getarGagal() {
+  try {
+    if (CONFIG.getarSaatGagal && "vibrate" in navigator) navigator.vibrate(CONFIG.polaGetar);
+  } catch (_) { /* perangkat tidak mendukung getar, abaikan */ }
+}
+
+function refreshHalaman() {
+  if (CONFIG.refreshOtomatis) setTimeout(() => location.reload(), CONFIG.jedaRefresh);
+}
+
+function pesanDetail(err) {
+  // Tampilkan penyebab asli agar mudah ditelusuri. Hapus bagian "Detail" ini jika formulir sudah dipakai umum.
+  return CONFIG.pesanGagal + " [Detail: " + (err && err.message ? err.message : err) + "]";
+}
+
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  statusEl.className = "status";
+
+  const valid = CONFIG.field.map(validasiField).every(Boolean);
+  if (!valid) {
+    const pertama = form.querySelector(".field.invalid input");
+    if (pertama) pertama.focus();
+    return;
+  }
+
+  if (CONFIG.scriptUrl.startsWith("PASTE_")) {
+    tampilStatus("gagal", "URL Google Apps Script belum diisi di CONFIG.scriptUrl.");
+    return;
+  }
+
+  const data = {};
+  CONFIG.field.forEach(f => data[f.nama] = document.getElementById(f.nama).value.trim());
+  data.website = form.elements["website"].value; // honeypot
+
+  /* ----- Mode kirim cepat: sukses ditampilkan seketika ----- */
+  if (CONFIG.kirimCepat) {
+    tampilStatus("sukses", CONFIG.pesanSukses);
+    kosongkanFormulir();
+    kirimKeServer(data).then(() => {
+      // Refresh hanya jika pengguna belum mengisi data berikutnya, agar ketikan tidak hilang
+      const kosong = CONFIG.field.every(f => !document.getElementById(f.nama).value);
+      if (kosong) refreshHalaman();
+    }).catch(err => {
+      console.error(err);
+      getarGagal();
+      // Kembalikan isian hanya jika formulir belum diisi lagi oleh pengguna
+      const masihKosong = CONFIG.field.every(f => !document.getElementById(f.nama).value);
+      if (masihKosong) {
+        CONFIG.field.forEach(f => { document.getElementById(f.nama).value = data[f.nama]; updateCounter(f); });
+      }
+      tampilStatus("gagal", "Data antrian " + data[CONFIG.field[0].nama] + " BELUM tersimpan. " + pesanDetail(err));
+    });
+    return;
+  }
+
+  /* ----- Mode aman: tunggu sampai data tersimpan ----- */
+  tombol.disabled = true;            // cegah kirim ganda
+  const teksAsli = tombol.textContent;
+  tombol.textContent = "Mengirim...";
+
+  let akanRefresh = false;
+  try {
+    await kirimKeServer(data);
+    tampilStatus("sukses", CONFIG.pesanSukses);
+    kosongkanFormulir();
+    akanRefresh = CONFIG.refreshOtomatis;
+    refreshHalaman();
+  } catch (err) {
+    console.error(err);
+    tampilStatus("gagal", pesanDetail(err));
+    getarGagal();
+  } finally {
+    // Jika halaman akan dimuat ulang, tombol dibiarkan nonaktif agar tidak terkirim ganda
+    if (!akanRefresh) {
+      tombol.disabled = false;
+      tombol.textContent = teksAsli;
+    }
+  }
+});
+</script>
+</body>
+</html>
