@@ -15,6 +15,8 @@
    - Kolom isian .......... CONFIG.field (nama, label, placeholder, max, wajib)
    - Karakter diizinkan ... CONFIG.polaTerlarang dan CONFIG.pesanKarakter
    - Khusus angka ........ tambahkan  angkaSaja: true  pada baris field di CONFIG.field
+   - Minimal karakter .... tambahkan  min: 4  pada baris field (dan di FIELD pada Code.gs)
+   - Ganti O->0, I->1 .... tambahkan  gantiOI: 4  (berlaku bila kode PERSIS 4 karakter; juga di Code.gs)
    - Pesan sukses/gagal ... CONFIG.pesanSukses dan CONFIG.pesanGagal
    - Kecepatan kirim ..... CONFIG.kirimCepat (false = aman, true = sukses tampil seketika)
    - Lama notif sukses ... CONFIG.lamaNotifSukses (milidetik, 3000 = 3 detik)
@@ -240,12 +242,15 @@ const CONFIG = {
   //   max   : batas karakter
   //   wajib : true = harus diisi, false = boleh dikosongkan
   //   angkaSaja : true = hanya angka 0-9 (opsional; tanpa ini, berlaku polaTerlarang di bawah)
+  //   min   : jumlah karakter minimal bila kolom diisi (opsional)
+  //   gantiOI : jika kode PERSIS segini karakter, huruf O diganti 0 dan huruf I diganti 1 (opsional)
   field: [
     { nama: "antrian", label: "Nomor Antrian",  placeholder: "Angka saja, maks. 4", max: 4, wajib: true, angkaSaja: true },
-    { nama: "pickup1", label: "Kode Pickup 1",  placeholder: "Maks. 6 karakter", max: 6, wajib: true  },
-    { nama: "pickup2", label: "Kode Pickup 2",  placeholder: "Maks. 6 karakter", max: 6, wajib: false },
-    { nama: "pickup3", label: "Kode Pickup 3",  placeholder: "Maks. 6 karakter", max: 6, wajib: false },
-    { nama: "pickup4", label: "Kode Pickup 4",  placeholder: "Maks. 6 karakter", max: 6, wajib: false }
+    { nama: "pickup1", label: "Kode Pickup 1",  placeholder: "4 sampai 6 karakter", max: 6, min: 4, gantiOI: 4, wajib: true  },
+    { nama: "pickup2", label: "Kode Pickup 2",  placeholder: "4 sampai 6 karakter", max: 6, min: 4, gantiOI: 4, wajib: false },
+    { nama: "pickup3", label: "Kode Pickup 3",  placeholder: "4 sampai 6 karakter", max: 6, min: 4, gantiOI: 4, wajib: false },
+    { nama: "pickup4", label: "Kode Pickup 4",  placeholder: "4 sampai 6 karakter", max: 6, min: 4, gantiOI: 4, wajib: false },
+    { nama: "pickup5", label: "Kode Pickup 5",  placeholder: "4 sampai 6 karakter", max: 6, min: 4, gantiOI: 4, wajib: false }
   ],
 
   // Karakter yang DIIZINKAN: hanya huruf (A-Z, a-z) dan angka (0-9).
@@ -327,7 +332,14 @@ function setError(id, pesan) {
   document.getElementById(id).setAttribute("aria-invalid", pesan ? "true" : "false");
 }
 
-function validasiField(f) {
+// Kode yang PERSIS f.gantiOI karakter: huruf O/o menjadi 0 dan huruf I/i menjadi 1
+function normalisasi(f, v) {
+  return (f.gantiOI && v.length === f.gantiOI) ? v.replace(/[Oo]/g, "0").replace(/[Ii]/g, "1") : v;
+}
+
+// akhir = true saat pengguna selesai mengisi (pindah kolom atau menekan Kirim).
+// Batas minimal hanya diperiksa saat akhir, agar tidak muncul error selagi masih mengetik.
+function validasiField(f, akhir = false) {
   const v = document.getElementById(f.nama).value.trim();
   let pesan = "";
   if (!v) {
@@ -336,9 +348,17 @@ function validasiField(f) {
     pesan = `Maksimal ${f.max} karakter. Kurangi ${v.length - f.max} karakter.`;
   } else if (bersihkan(v, f) !== v) {
     pesan = pesanKarakterField(f);
+  } else if (akhir && f.min && v.length < f.min) {
+    pesan = `Minimal ${f.min} karakter. Tambah ${f.min - v.length} karakter.`;
   }
   setError(f.nama, pesan);
   return !pesan;
+}
+
+// Terapkan penggantian O/I pada kolom, lalu perbarui tampilan
+function terapkanNormalisasi(f) {
+  const el = document.getElementById(f.nama), v = el.value.trim(), baru = normalisasi(f, v);
+  if (baru !== el.value) { el.value = baru; updateCounter(f); }
 }
 
 const cariField = nama => CONFIG.field.find(f => f.nama === nama);
@@ -376,7 +396,9 @@ form.addEventListener("input", e => {
 });
 form.addEventListener("focusout", e => {
   const f = cariField(e.target.name);
-  if (f) validasiField(f);
+  if (!f) return;
+  terapkanNormalisasi(f);
+  validasiField(f, true);
 });
 
 /* ---------- Status ---------- */
@@ -440,7 +462,8 @@ form.addEventListener("submit", async e => {
   e.preventDefault();
   statusEl.className = "status";
 
-  const valid = CONFIG.field.map(validasiField).every(Boolean);
+  CONFIG.field.forEach(terapkanNormalisasi);
+  const valid = CONFIG.field.map(f => validasiField(f, true)).every(Boolean);
   if (!valid) {
     const pertama = form.querySelector(".field.invalid input");
     if (pertama) pertama.focus();
